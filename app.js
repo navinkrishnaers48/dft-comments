@@ -14,7 +14,7 @@ let appData = JSON.parse(localStorage.getItem("dft_cache_data")) || EMPTY_DATA;
 let docSelections = {};
 let selectedCustomTemplates = [];
 let bypassHwClWarning = false;
-let pendingSaveAndReset = false;
+let pendingCoordSaveAndReset = false;
 
 function getScriptUrl() {
   const urlParam = new URLSearchParams(window.location.search).get("api");
@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupTabs();
   setupListeners();
   renderAll();
-  loadSetupData();
+  loadSetupData(false);
 });
 
 function setupTabs() {
@@ -50,31 +50,48 @@ function setupTabs() {
 }
 
 function setupListeners() {
-  ["agentSelect", "coordSelect", "askCoordChk", "priceMismatchChk", "dateMismatchChk",
+  ["agentSelect", "priceMismatchChk", "dateMismatchChk",
    "ratifiedPrice", "interfacePrice", "ratifiedDate", "interfaceDate"].forEach(id => {
-    document.getElementById(id).addEventListener("input", () => {
-      toggleSubInputs();
-      buildComment();
-    });
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("input", () => {
+        toggleSubInputs();
+        buildAgentComment();
+      });
+    }
+  });
+
+  ["coordSelect", "askCoordChk"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("input", () => {
+        toggleSubInputs();
+        buildCoordComment();
+      });
+    }
   });
 
   document.querySelectorAll('input[name="hwOpt"], input[name="clOpt"]').forEach(r => {
     r.addEventListener("change", () => {
       bypassHwClWarning = false;
-      buildComment();
+      buildCoordComment();
     });
   });
 
-  document.getElementById("copyOnlyBtn").addEventListener("click", () => handleAction(false));
-  document.getElementById("saveStartNewBtn").addEventListener("click", () => handleAction(true));
+  document.getElementById("copyOnlyBtn").addEventListener("click", () => handleAgentAction(false));
+  document.getElementById("saveStartNewBtn").addEventListener("click", () => handleAgentAction(true));
+
+  document.getElementById("copyCoordBtn").addEventListener("click", () => handleCoordAction(false));
+  document.getElementById("saveCoordNewBtn").addEventListener("click", () => handleCoordAction(true));
+
   document.getElementById("addSetupBtn").addEventListener("click", addSetupItem);
-  document.getElementById("refreshBtn").addEventListener("click", loadSetupData);
+  document.getElementById("refreshBtn").addEventListener("click", () => loadSetupData(true));
 
   document.getElementById("saveApiUrlBtn").addEventListener("click", () => {
     const val = document.getElementById("apiUrlInput").value.trim();
     localStorage.setItem("dft_script_url", val);
     showToast("Web App URL Saved!");
-    loadSetupData();
+    loadSetupData(true);
   });
 
   document.getElementById("modalBackBtn").addEventListener("click", () => {
@@ -83,7 +100,7 @@ function setupListeners() {
   document.getElementById("modalProceedBtn").addEventListener("click", () => {
     bypassHwClWarning = true;
     document.getElementById("warningModal").classList.add("hidden");
-    handleAction(pendingSaveAndReset);
+    handleCoordAction(pendingCoordSaveAndReset);
   });
 
   document.getElementById("manualAgentSelect").addEventListener("change", e => {
@@ -125,14 +142,50 @@ function setupListeners() {
 
 async function postToSheet(action, payloadObj) {
   const url = getScriptUrl();
-  if (!url) return null;
-  const res = await fetch(`${url}?action=${action}`, {
-    method: "POST",
-    redirect: "follow",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(payloadObj)
-  });
-  return res.json();
+  if (!url) {
+    alert("Error: Web App URL is blank in Setup!");
+    return null;
+  }
+  try {
+    const res = await fetch(`${url}?action=${action}&t=${Date.now()}`, {
+      method: "POST",
+      redirect: "follow",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payloadObj)
+    });
+    const text = await res.text();
+    const json = JSON.parse(text);
+    if (json.status !== "success") {
+      alert("Google Sheet Error: " + (json.message || text));
+    }
+    return json;
+  } catch (err) {
+    alert("Sheet Sync Failed (" + action + "): " + err.message);
+    return null;
+  }
+}
+
+async function loadSetupData(notify = false) {
+  const url = getScriptUrl();
+  if (!url) return;
+  try {
+    const res = await fetch(`${url}?action=getSetup&t=${Date.now()}`, {
+      method: "GET",
+      redirect: "follow"
+    });
+    const text = await res.text();
+    const json = JSON.parse(text);
+    if (json.status === "success") {
+      appData = json.data;
+      saveLocalCache();
+      renderAll();
+      if (notify) showToast("Synced with Google Sheet!");
+    } else {
+      alert("Load Error: " + text);
+    }
+  } catch (err) {
+    alert("Could not read Google Sheet: " + err.message);
+  }
 }
 
 function updateLearnPreview() {
@@ -181,7 +234,7 @@ async function confirmAndSaveLearn() {
   document.getElementById("learnWordValue").value = "";
   document.getElementById("learnModal").classList.add("hidden");
   showToast("Confirmed & Saved to Sheet!");
-  loadSetupData();
+  await loadSetupData(false);
 }
 
 function saveLocalCache() {
@@ -192,22 +245,6 @@ function toggleSubInputs() {
   document.getElementById("priceMismatchInputs").classList.toggle("hidden", !document.getElementById("priceMismatchChk").checked);
   document.getElementById("dateMismatchInputs").classList.toggle("hidden", !document.getElementById("dateMismatchChk").checked);
   document.getElementById("hwClSection").classList.toggle("hidden", document.getElementById("askCoordChk").checked);
-}
-
-async function loadSetupData() {
-  const url = getScriptUrl();
-  if (!url) return;
-  try {
-    const res = await fetch(`${url}?action=getSetup`, { redirect: "follow" });
-    const json = await res.json();
-    if (json.status === "success") {
-      appData = json.data;
-      saveLocalCache();
-      renderAll();
-    }
-  } catch (err) {
-    showToast("Sync error — check Web App URL in Setup");
-  }
 }
 
 function renderAll() {
@@ -223,9 +260,10 @@ function renderAll() {
 
 function fillSelect(id, list, includeBlank) {
   const el = document.getElementById(id);
+  if (!el) return;
   const current = el.value;
   el.innerHTML = includeBlank ? `<option value="">-- Blank --</option>` : `<option value="">-- User --</option>`;
-  list.forEach(item => {
+  (list || []).forEach(item => {
     const opt = document.createElement("option");
     opt.value = item;
     opt.textContent = item;
@@ -253,14 +291,14 @@ function renderCustomTemplates() {
         ? selectedCustomTemplates.filter(x => x !== idx)
         : [...selectedCustomTemplates, idx];
       renderCustomTemplates();
-      buildComment();
+      buildAgentComment();
     });
   });
 }
 
 function renderManualQuickTags() {
   const box = document.getElementById("manualQuickTags");
-  const tags = [...appData.documents, "is missing.", "signature is missing on page "];
+  const tags = [...(appData.documents || []), "is missing.", "signature is missing on page "];
   box.innerHTML = tags.map(t => `<span class="role-chip">${t}</span>`).join("");
   box.querySelectorAll(".role-chip").forEach(chip => {
     chip.addEventListener("click", () => {
@@ -274,7 +312,7 @@ function renderManualQuickTags() {
 
 function renderDocuments() {
   const container = document.getElementById("documentsList");
-  if (!appData.documents.length) {
+  if (!appData.documents || !appData.documents.length) {
     container.innerHTML = "<p style='font-size:13px;color:#64748b;'>No documents added yet. Go to Setup tab to add documents.</p>";
     return;
   }
@@ -301,7 +339,7 @@ function renderDocuments() {
       btn.addEventListener("click", () => {
         state.mode = btn.dataset.mode;
         renderDocuments();
-        buildComment();
+        buildAgentComment();
       });
     });
 
@@ -331,14 +369,14 @@ function renderDocuments() {
           ).join("")}
         </div>
       `;
-      sub.querySelector(".page-inp").addEventListener("input", e => { state.page = e.target.value; buildComment(); });
-      sub.querySelector(".pos-sel").addEventListener("change", e => { state.position = e.target.value; buildComment(); });
+      sub.querySelector(".page-inp").addEventListener("input", e => { state.page = e.target.value; buildAgentComment(); });
+      sub.querySelector(".pos-sel").addEventListener("change", e => { state.position = e.target.value; buildAgentComment(); });
       sub.querySelectorAll(".role-chip").forEach(chip => {
         chip.addEventListener("click", () => {
           const r = chip.dataset.role;
           state.roles = state.roles.includes(r) ? state.roles.filter(x => x !== r) : [...state.roles, r];
           renderDocuments();
-          buildComment();
+          buildAgentComment();
         });
       });
       div.appendChild(sub);
@@ -350,7 +388,7 @@ function renderDocuments() {
       sub.innerHTML = `
         <label>Select Missing Fields in ${doc}:</label>
         <div class="role-chips">
-          ${appData.fields.map(f =>
+          ${(appData.fields || []).map(f =>
             `<span class="role-chip ${state.fields.includes(f) ? 'selected' : ''}" data-field="${f}">${f}</span>`
           ).join("")}
         </div>
@@ -360,7 +398,7 @@ function renderDocuments() {
           const f = chip.dataset.field;
           state.fields = state.fields.includes(f) ? state.fields.filter(x => x !== f) : [...state.fields, f];
           renderDocuments();
-          buildComment();
+          buildAgentComment();
         });
       });
       div.appendChild(sub);
@@ -370,16 +408,9 @@ function renderDocuments() {
   });
 }
 
-function buildComment() {
+function buildAgentComment() {
   const agent = document.getElementById("agentSelect").value;
-  const coord = document.getElementById("coordSelect").value;
-  const askCoord = document.getElementById("askCoordChk").checked;
-  const hw = document.querySelector('input[name="hwOpt"]:checked').value;
-  const cl = document.querySelector('input[name="clOpt"]:checked').value;
-
-  let greeting = "Hi,";
-  if (agent && !coord) greeting = `Hi ${agent.split(" ")[0]},`;
-  else if (coord && !agent) greeting = `Hi ${coord.split(" ")[0]},`;
+  const greeting = agent ? `Hi ${agent.split(" ")[0]},` : "Hi,";
 
   let agentItems = [];
 
@@ -420,7 +451,35 @@ function buildComment() {
     }
   });
 
+  if (!agentItems.length) {
+    document.getElementById("commentPreview").value = "";
+    return "";
+  }
+
+  let bodyLines = [greeting, ""];
+  if (agentItems.length === 1) {
+    bodyLines.push(agentItems[0]);
+  } else {
+    agentItems.forEach((item, idx) => bodyLines.push(`${idx + 1}. ${item}`));
+  }
+
+  bodyLines.push("");
+  bodyLines.push("Kindly update and upload it in FUB. Thank you!");
+
+  const finalComment = bodyLines.join("\n");
+  document.getElementById("commentPreview").value = finalComment;
+  return finalComment;
+}
+
+function buildCoordComment() {
+  const coord = document.getElementById("coordSelect").value;
+  const askCoord = document.getElementById("askCoordChk").checked;
+  const hw = document.querySelector('input[name="hwOpt"]:checked').value;
+  const cl = document.querySelector('input[name="clOpt"]:checked').value;
+
+  const greeting = coord ? `Hi ${coord.split(" ")[0]},` : "Hi,";
   let coordLine = "";
+
   if (askCoord) {
     coordLine = "Kindly confirm the coordinator.";
   } else if (hw || cl) {
@@ -435,43 +494,38 @@ function buildComment() {
     }
   }
 
-  if (!agentItems.length && !coordLine) {
-    document.getElementById("commentPreview").value = "";
+  if (!coordLine) {
+    document.getElementById("coordCommentPreview").value = "";
     return "";
   }
 
-  let bodyLines = [greeting, ""];
-  if (agentItems.length === 1) {
-    bodyLines.push(agentItems[0]);
-  } else if (agentItems.length > 1) {
-    agentItems.forEach((item, idx) => bodyLines.push(`${idx + 1}. ${item}`));
-  }
-
-  if (agentItems.length > 0) {
-    bodyLines.push("");
-    bodyLines.push("Kindly update and upload it in FUB.");
-  }
-
-  if (coordLine) {
-    if (agentItems.length > 0) bodyLines.push("");
-    bodyLines.push(coordLine);
-  }
-
-  bodyLines.push("");
-  bodyLines.push("Thank you!");
-
-  const finalComment = bodyLines.join("\n");
-  document.getElementById("commentPreview").value = finalComment;
-  return finalComment;
+  const finalCoordComment = `${greeting}\n\n${coordLine}\n\nThank you!`;
+  document.getElementById("coordCommentPreview").value = finalCoordComment;
+  return finalCoordComment;
 }
 
-function handleAction(saveAndReset) {
+function handleAgentAction(saveAndReset) {
+  const text = document.getElementById("commentPreview").value.trim();
+  if (!text) return showToast("Nothing to copy in Agent Comment!");
+
+  navigator.clipboard.writeText(text);
+  showToast("Agent Comment copied!");
+
+  if (saveAndReset) {
+    const agent = document.getElementById("agentSelect").value;
+    const summary = Object.entries(docSelections).filter(([_, v]) => v.mode).map(([k, v]) => `${k}(${v.mode})`).join(", ");
+    resetAgentForm();
+    saveAuditPayload(agent, "", summary, text);
+  }
+}
+
+function handleCoordAction(saveAndReset) {
   const askCoord = document.getElementById("askCoordChk").checked;
   const hw = document.querySelector('input[name="hwOpt"]:checked').value;
   const cl = document.querySelector('input[name="clOpt"]:checked').value;
 
   if (!askCoord && !bypassHwClWarning && ((hw && !cl) || (!hw && cl))) {
-    pendingSaveAndReset = saveAndReset;
+    pendingCoordSaveAndReset = saveAndReset;
     const missingItem = !cl ? "CL100" : "H/W";
     const selectedItem = hw ? "H/W" : "CL100";
     document.getElementById("warningText").textContent =
@@ -480,18 +534,17 @@ function handleAction(saveAndReset) {
     return;
   }
 
-  const text = document.getElementById("commentPreview").value.trim();
-  if (!text) return showToast("Nothing to copy!");
+  const text = document.getElementById("coordCommentPreview").value.trim();
+  if (!text) return showToast("Nothing to copy in Coordinator Note!");
 
   navigator.clipboard.writeText(text);
-  showToast("Comment copied to clipboard!");
+  showToast("Coordinator Note copied!");
 
   if (saveAndReset) {
-    const agent = document.getElementById("agentSelect").value;
     const coord = document.getElementById("coordSelect").value;
-    const summary = Object.entries(docSelections).filter(([_, v]) => v.mode).map(([k, v]) => `${k}(${v.mode})`).join(", ");
-    resetForm();
-    saveAuditPayload(agent, coord, summary, text);
+    const summary = askCoord ? "Coordinator Confirmation" : `H/W: ${hw || "None"}, CL100: ${cl || "None"}`;
+    resetCoordForm();
+    saveAuditPayload("", coord, summary, text);
   }
 }
 
@@ -510,22 +563,17 @@ async function saveAuditPayload(agent, coordinator, summary, comment) {
   renderHistory();
 
   await postToSheet("saveAudit", payload);
-  loadSetupData();
+  await loadSetupData(false);
 }
 
-function resetForm() {
+function resetAgentForm() {
   document.getElementById("agentSelect").value = "";
-  document.getElementById("coordSelect").value = "";
-  document.getElementById("askCoordChk").checked = false;
   document.getElementById("priceMismatchChk").checked = false;
   document.getElementById("dateMismatchChk").checked = false;
   document.getElementById("ratifiedPrice").value = "";
   document.getElementById("interfacePrice").value = "";
   document.getElementById("ratifiedDate").value = "";
   document.getElementById("interfaceDate").value = "";
-  document.querySelector('input[name="hwOpt"][value=""]').checked = true;
-  document.querySelector('input[name="clOpt"][value=""]').checked = true;
-  bypassHwClWarning = false;
   selectedCustomTemplates = [];
 
   Object.keys(docSelections).forEach(k => {
@@ -535,6 +583,16 @@ function resetForm() {
   toggleSubInputs();
   renderAll();
   document.getElementById("commentPreview").value = "";
+}
+
+function resetCoordForm() {
+  document.getElementById("coordSelect").value = "";
+  document.getElementById("askCoordChk").checked = false;
+  document.querySelector('input[name="hwOpt"][value=""]').checked = true;
+  document.querySelector('input[name="clOpt"][value=""]').checked = true;
+  bypassHwClWarning = false;
+  toggleSubInputs();
+  document.getElementById("coordCommentPreview").value = "";
 }
 
 async function addSetupItem() {
@@ -552,9 +610,11 @@ async function addSetupItem() {
   document.getElementById("setupValue").value = "";
   showToast("Saving to Google Sheet...");
 
-  await postToSheet("addSetupItem", { category, value });
-  showToast("Synced with Google Sheet!");
-  loadSetupData();
+  const res = await postToSheet("addSetupItem", { category, value });
+  if (res && res.status === "success") {
+    showToast("Synced with Google Sheet!");
+    await loadSetupData(false);
+  }
 }
 
 function renderHistory() {
