@@ -1,4 +1,5 @@
-const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwGn6jYZ5YIaliuIjdRllUjXfZGJVdoMqLF6LeDNMj4t-FfJ4CLKktQPyXAw4CegT1a/exec"; 
+const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwGn6jYZ5YIaliuIjdRllUjXfZGJVdoMqLF6LeDNMj4t-FfJ4CLKktQPyXAw4CegT1a/exec";
+
 const EMPTY_DATA = {
   agents: [],
   coordinators: [],
@@ -21,7 +22,12 @@ function getScriptUrl() {
     localStorage.setItem("dft_script_url", urlParam);
     return urlParam;
   }
-  return localStorage.getItem("dft_script_url") || DEFAULT_SCRIPT_URL;
+  const saved = localStorage.getItem("dft_script_url");
+  if (!saved || saved.includes("/a/macros/")) {
+    localStorage.setItem("dft_script_url", DEFAULT_SCRIPT_URL);
+    return DEFAULT_SCRIPT_URL;
+  }
+  return saved;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -116,6 +122,19 @@ function setupListeners() {
   });
   document.getElementById("learnConfirmSaveBtn").addEventListener("click", confirmAndSaveLearn);
 }
+
+async function postToSheet(action, payloadObj) {
+  const url = getScriptUrl();
+  if (!url) return null;
+  const res = await fetch(`${url}?action=${action}`, {
+    method: "POST",
+    redirect: "follow",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payloadObj)
+  });
+  return res.json();
+}
+
 function updateLearnPreview() {
   const type = document.getElementById("learnTypeSelect").value;
   document.getElementById("learnCompleteFields").classList.toggle("hidden", type !== "complete");
@@ -137,7 +156,6 @@ function updateLearnPreview() {
 
 async function confirmAndSaveLearn() {
   const type = document.getElementById("learnTypeSelect").value;
-  const url = getScriptUrl();
 
   if (type === "complete") {
     const title = document.getElementById("learnTemplateTitle").value.trim();
@@ -147,13 +165,7 @@ async function confirmAndSaveLearn() {
     appData.customTemplates.push({ title, body: templateBody });
     saveLocalCache();
     renderAll();
-
-    if (url) {
-      await fetch(`${url}?action=addCustomTemplate`, {
-        method: "POST",
-        body: JSON.stringify({ title, templateBody })
-      });
-    }
+    await postToSheet("addCustomTemplate", { title, templateBody });
   } else {
     const word = document.getElementById("learnWordValue").value.trim();
     if (!word) return showToast("Please enter the word/name");
@@ -162,19 +174,14 @@ async function confirmAndSaveLearn() {
     if (type === "field" && !appData.fields.includes(word)) appData.fields.push(word);
     saveLocalCache();
     renderAll();
-
-    if (url) {
-      await fetch(`${url}?action=addSetupItem`, {
-        method: "POST",
-        body: JSON.stringify({ category: type, value: word })
-      });
-    }
+    await postToSheet("addSetupItem", { category: type, value: word });
   }
 
   document.getElementById("learnTemplateTitle").value = "";
   document.getElementById("learnWordValue").value = "";
   document.getElementById("learnModal").classList.add("hidden");
-  showToast("Confirmed & Saved!");
+  showToast("Confirmed & Saved to Sheet!");
+  loadSetupData();
 }
 
 function saveLocalCache() {
@@ -191,7 +198,7 @@ async function loadSetupData() {
   const url = getScriptUrl();
   if (!url) return;
   try {
-    const res = await fetch(`${url}?action=getSetup`);
+    const res = await fetch(`${url}?action=getSetup`, { redirect: "follow" });
     const json = await res.json();
     if (json.status === "success") {
       appData = json.data;
@@ -199,7 +206,7 @@ async function loadSetupData() {
       renderAll();
     }
   } catch (err) {
-    showToast("Using local mode (Check Web App URL in Setup)");
+    showToast("Sync error — check Web App URL in Setup");
   }
 }
 
@@ -264,6 +271,7 @@ function renderManualQuickTags() {
     });
   });
 }
+
 function renderDocuments() {
   const container = document.getElementById("documentsList");
   if (!appData.documents.length) {
@@ -487,7 +495,7 @@ function handleAction(saveAndReset) {
   }
 }
 
-function saveAuditPayload(agent, coordinator, summary, comment) {
+async function saveAuditPayload(agent, coordinator, summary, comment) {
   const payload = {
     timestamp: new Date().toLocaleString(),
     auditedBy: document.getElementById("auditedBySelect").value,
@@ -501,13 +509,8 @@ function saveAuditPayload(agent, coordinator, summary, comment) {
   saveLocalCache();
   renderHistory();
 
-  const url = getScriptUrl();
-  if (url) {
-    fetch(`${url}?action=saveAudit`, {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }).then(() => loadSetupData());
-  }
+  await postToSheet("saveAudit", payload);
+  loadSetupData();
 }
 
 function resetForm() {
@@ -547,16 +550,11 @@ async function addSetupItem() {
   }
 
   document.getElementById("setupValue").value = "";
-  showToast("Added!");
+  showToast("Saving to Google Sheet...");
 
-  const url = getScriptUrl();
-  if (url) {
-    await fetch(`${url}?action=addSetupItem`, {
-      method: "POST",
-      body: JSON.stringify({ category, value })
-    });
-    loadSetupData();
-  }
+  await postToSheet("addSetupItem", { category, value });
+  showToast("Synced with Google Sheet!");
+  loadSetupData();
 }
 
 function renderHistory() {
