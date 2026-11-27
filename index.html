@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DFT Comments - FUB Audit Tool</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">DFT Comments</div>
+    <div class="user-box">
+      <select id="auditedBySelect" title="Audited By"></select>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="auditTab">Audit</button>
+    <button class="tab-btn" data-tab="manualTab">Manual & Learn</button>
+    <button class="tab-btn" data-tab="historyTab">History</button>
+    <button class="tab-btn" data-tab="setupTab">Setup</button>
+  </nav>
+
+  <main class="container">
+    <!-- TAB 1: STANDARD AUDIT -->
+    <section id="auditTab" class="tab-content active">
+      <div class="card">
+        <h3>1. Recipients</h3>
+        <div class="grid-2">
+          <div>
+            <label>Agent Name (Optional)</label>
+            <select id="agentSelect"><option value="">-- Blank --</option></select>
+          </div>
+          <div>
+            <label>Coordinator Name (Optional)</label>
+            <select id="coordSelect"><option value="">-- Blank --</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div id="customTemplatesCard" class="card hidden">
+        <h3>Saved Quick Templates</h3>
+        <div id="customTemplatesList" class="role-chips"></div>
+      </div>
+
+      <div class="card">
+        <h3>2. Documents Audit</h3>
+        <div id="documentsList" class="doc-list">Loading documents...</div>
+      </div>
+
+      <div class="card">
+        <h3>3. FUB Interface Mismatch</h3>
+        <div class="mismatch-block">
+          <label class="check-row">
+            <input type="checkbox" id="priceMismatchChk" /> Price Mismatch
+          </label>
+          <div id="priceMismatchInputs" class="grid-2 hidden">
+            <input type="text" id="ratifiedPrice" placeholder="Ratified Price (e.g. $345,000)" />
+            <input type="text" id="interfacePrice" placeholder="Interface Form Price (e.g. $350,000)" />
+          </div>
+        </div>
+        <div class="mismatch-block">
+          <label class="check-row">
+            <input type="checkbox" id="dateMismatchChk" /> Closing Date Mismatch
+          </label>
+          <div id="dateMismatchInputs" class="grid-2 hidden">
+            <input type="text" id="ratifiedDate" placeholder="Ratified Date (MM/DD/YYYY)" />
+            <input type="text" id="interfaceDate" placeholder="Interface Date (MM/DD/YYYY)" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>4. Coordinator Items (H/W & CL100)</h3>
+        <label class="check-row highlight-box">
+          <input type="checkbox" id="askCoordChk" /> Ask for Coordinator Confirmation
+        </label>
+
+        <div id="hwClSection">
+          <div class="radio-group">
+            <span class="group-title">H/W (Home Warranty):</span>
+            <label><input type="radio" name="hwOpt" value="" checked /> None</label>
+            <label><input type="radio" name="hwOpt" value="N/A" /> N/A</label>
+            <label><input type="radio" name="hwOpt" value="Buyer" /> Buyer</label>
+            <label><input type="radio" name="hwOpt" value="Seller" /> Seller</label>
+          </div>
+
+          <div class="radio-group">
+            <span class="group-title">CL100:</span>
+            <label><input type="radio" name="clOpt" value="" checked /> None</label>
+            <label><input type="radio" name="clOpt" value="N/A" /> N/A</label>
+            <label><input type="radio" name="clOpt" value="Buyer" /> Buyer</label>
+            <label><input type="radio" name="clOpt" value="Seller" /> Seller</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card preview-card">
+        <h3>Generated FUB Comment</h3>
+        <textarea id="commentPreview" rows="7" placeholder="Select options above to generate comment..."></textarea>
+        <div class="btn-row">
+          <button id="copyOnlyBtn" class="btn secondary">Copy Only</button>
+          <button id="saveStartNewBtn" class="btn primary">Save & Start New</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: MANUAL COMMENT & AUTO-LEARN -->
+    <section id="manualTab" class="tab-content">
+      <div class="card">
+        <h3>Manual Comment Builder (Agent Mandatory)</h3>
+        <label>Select Agent Name *</label>
+        <select id="manualAgentSelect"><option value="">-- Select Agent (Required) --</option></select>
+
+        <div id="manualEditorBox" class="hidden" style="margin-top:12px;">
+          <label>Quick Insert Tags (Tap to insert into comment):</label>
+          <div id="manualQuickTags" class="role-chips" style="margin-bottom:8px;"></div>
+
+          <label>Comment Box (Auto-starts with Hi [Agent]):</label>
+          <textarea id="manualCommentText" rows="6"></textarea>
+
+          <div class="btn-row">
+            <button id="manualCopySaveBtn" class="btn primary">Copy & Save Audit</button>
+            <button id="openLearnModalBtn" class="btn secondary">+ Add to Template</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: HISTORY -->
+    <section id="historyTab" class="tab-content">
+      <div class="card">
+        <div class="flex-between">
+          <h3>Recent Audits (Last 20)</h3>
+          <button id="refreshBtn" class="btn small">Refresh</button>
+        </div>
+        <div id="historyList" class="history-list">Loading...</div>
+      </div>
+    </section>
+
+    <!-- TAB 4: SETUP -->
+    <section id="setupTab" class="tab-content">
+      <div class="card">
+        <h3>Google Sheet Connection (No Code Edit Needed)</h3>
+        <label>Google Apps Script Web App URL</label>
+        <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/.../exec" />
+        <button id="saveApiUrlBtn" class="btn secondary full-btn">Save & Connect URL</button>
+      </div>
+
+      <div class="card">
+        <h3>Add New Setup Item</h3>
+        <label>Category</label>
+        <select id="setupCategory">
+          <option value="agent">Agent Name</option>
+          <option value="coordinator">Coordinator Name</option>
+          <option value="document">Document Type</option>
+          <option value="field">Document Missing Field (e.g. Tax Map #)</option>
+          <option value="member">Team Member (Audited By)</option>
+        </select>
+        <label style="margin-top:8px;">Name / Value</label>
+        <input type="text" id="setupValue" placeholder="Enter name and tap Add..." />
+        <button id="addSetupBtn" class="btn primary full-btn">Add to Setup</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- WARNING MODAL FOR H/W & CL100 -->
+  <div id="warningModal" class="modal hidden">
+    <div class="modal-box">
+      <h4>⚠️ Missing Check</h4>
+      <p id="warningText"></p>
+      <div class="btn-row">
+        <button id="modalBackBtn" class="btn secondary">Go Back & Select</button>
+        <button id="modalProceedBtn" class="btn primary">Yes, Proceed Anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD TO TEMPLATE & CONFIRMATION MODAL -->
+  <div id="learnModal" class="modal hidden">
+    <div class="modal-box">
+      <h4>Save to Template / Setup</h4>
+      <label>What do you want to save?</label>
+      <select id="learnTypeSelect">
+        <option value="complete">Complete Comment Format (Quick Template)</option>
+        <option value="document">Particular Word as New Document Type</option>
+        <option value="field">Particular Word as New Missing Field</option>
+      </select>
+
+      <div id="learnCompleteFields" style="margin-top:8px;">
+        <label>Template Short Title (e.g. HOA Addendum Missing)</label>
+        <input type="text" id="learnTemplateTitle" placeholder="Enter short button name..." />
+      </div>
+
+      <div id="learnWordFields" class="hidden" style="margin-top:8px;">
+        <label>Exact Word / Document / Field Name</label>
+        <input type="text" id="learnWordValue" placeholder="e.g. Lead-Based Paint Disclosure" />
+      </div>
+
+      <div class="preview-confirm-box">
+        <strong>Confirmation Preview:</strong>
+        <div id="learnConfirmPreview" class="confirm-text"></div>
+      </div>
+
+      <div class="btn-row">
+        <button id="learnCancelBtn" class="btn secondary">Cancel</button>
+        <button id="learnConfirmSaveBtn" class="btn primary">Yes, Confirm & Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>
