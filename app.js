@@ -413,10 +413,12 @@ function buildAgentComment() {
   const greeting = agent ? `Hi ${agent.split(" ")[0]},` : "Hi,";
 
   let agentItems = [];
+  let hasDocumentOrTemplate = false;
 
   Object.entries(docSelections).forEach(([doc, st]) => {
     if (st.mode === "missing") {
       agentItems.push(`${doc} is missing.`);
+      hasDocumentOrTemplate = true;
     } else if (st.mode === "signature") {
       let loc = [];
       if (st.position) loc.push(`on the ${st.position.toLowerCase()}`);
@@ -424,8 +426,10 @@ function buildAgentComment() {
       const locStr = loc.length ? `, ${loc.join(" ")}` : "";
       const roleStr = st.roles.length ? `the ${st.roles.join(" and ")}'s signature` : "signature";
       agentItems.push(`In ${doc}${locStr}, ${roleStr} is missing.`);
+      hasDocumentOrTemplate = true;
     } else if (st.mode === "fields" && st.fields.length) {
       agentItems.push(`In ${doc}, the ${st.fields.join(", ")} ${st.fields.length > 1 ? "are" : "is"} missing.`);
+      hasDocumentOrTemplate = true;
     }
   });
 
@@ -447,7 +451,10 @@ function buildAgentComment() {
         .replace(/^Hi .*?,?\n+/i, "")
         .replace(/Kindly update and upload it in FUB\.?\s*Thank you!?/gi, "")
         .trim();
-      if (cleaned) agentItems.push(cleaned);
+      if (cleaned) {
+        agentItems.push(cleaned);
+        hasDocumentOrTemplate = true;
+      }
     }
   });
 
@@ -464,7 +471,11 @@ function buildAgentComment() {
   }
 
   bodyLines.push("");
-  bodyLines.push("Kindly update and upload it in FUB. Thank you!");
+  if (hasDocumentOrTemplate) {
+    bodyLines.push("Kindly update and upload it in FUB. Thank you!");
+  } else {
+    bodyLines.push("Thank you!");
+  }
 
   const finalComment = bodyLines.join("\n");
   document.getElementById("commentPreview").value = finalComment;
