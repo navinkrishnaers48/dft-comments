@@ -25,17 +25,9 @@
     <!-- TAB 1: STANDARD AUDIT -->
     <section id="auditTab" class="tab-content active">
       <div class="card">
-        <h3>1. Recipients</h3>
-        <div class="grid-2">
-          <div>
-            <label>Agent Name (Optional)</label>
-            <select id="agentSelect"><option value="">-- Blank --</option></select>
-          </div>
-          <div>
-            <label>Coordinator Name (Optional)</label>
-            <select id="coordSelect"><option value="">-- Blank --</option></select>
-          </div>
-        </div>
+        <h3>1. Agent Recipient</h3>
+        <label>Agent Name (Optional)</label>
+        <select id="agentSelect"><option value="">-- Blank --</option></select>
       </div>
 
       <div id="customTemplatesCard" class="card hidden">
@@ -70,8 +62,22 @@
         </div>
       </div>
 
+      <div class="card preview-card">
+        <h3>Generated Agent / Document Comment</h3>
+        <textarea id="commentPreview" rows="6" placeholder="Select agent and document options above..."></textarea>
+        <div class="btn-row">
+          <button id="copyOnlyBtn" class="btn secondary">Copy Agent Comment</button>
+          <button id="saveStartNewBtn" class="btn primary">Save & Start New</button>
+        </div>
+      </div>
+
       <div class="card">
-        <h3>4. Coordinator Items (H/W & CL100)</h3>
+        <h3>4. Coordinator Tag Notes (H/W & CL100 — Separate Comment)</h3>
+        <div style="margin-bottom:10px;">
+          <label>Select Coordinator Name</label>
+          <select id="coordSelect"><option value="">-- Select Coordinator --</option></select>
+        </div>
+
         <label class="check-row highlight-box">
           <input type="checkbox" id="askCoordChk" /> Ask for Coordinator Confirmation
         </label>
@@ -93,14 +99,14 @@
             <label><input type="radio" name="clOpt" value="Seller" /> Seller</label>
           </div>
         </div>
-      </div>
 
-      <div class="card preview-card">
-        <h3>Generated FUB Comment</h3>
-        <textarea id="commentPreview" rows="7" placeholder="Select options above to generate comment..."></textarea>
-        <div class="btn-row">
-          <button id="copyOnlyBtn" class="btn secondary">Copy Only</button>
-          <button id="saveStartNewBtn" class="btn primary">Save & Start New</button>
+        <div style="margin-top:12px;">
+          <label>Generated Coordinator Comment (Separate)</label>
+          <textarea id="coordCommentPreview" rows="4" placeholder="Select coordinator and H/W / CL100 options..."></textarea>
+          <div class="btn-row">
+            <button id="copyCoordBtn" class="btn secondary">Copy Coordinator Note</button>
+            <button id="saveCoordNewBtn" class="btn primary">Save Coord Note & Clear</button>
+          </div>
         </div>
       </div>
     </section>
@@ -141,7 +147,7 @@
     <!-- TAB 4: SETUP -->
     <section id="setupTab" class="tab-content">
       <div class="card">
-        <h3>Google Sheet Connection (No Code Edit Needed)</h3>
+        <h3>Google Sheet Connection</h3>
         <label>Google Apps Script Web App URL</label>
         <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/.../exec" />
         <button id="saveApiUrlBtn" class="btn secondary full-btn">Save & Connect URL</button>
